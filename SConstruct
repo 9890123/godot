@@ -438,5 +438,262 @@ if selected_platform in platform_list:
         disable_nonessential_warnings = ["/wd4267", "/wd4244", "/wd4305", "/wd4018", "/wd4800"]
         if env["warnings"] == "extra":
             env.Append(CCFLAGS=["/Wall"])
-        
+        elif env["warnings"] == "all":
+            env.Append(CCFLAGS=["/W3"] + disable_nonessential_warnings)
+        elif env["warnings"] == "moderate":
+            env.Append(CCFLAGS=["/W2"] + disable_nonessential_warnings)
+        else:
+            env.Append(CCFLAGS=["/w"])
             
+        env.Append(CCFLAGS=["/EHsc"])
+        
+        if env["werror"]:
+            env.Append(CCFLAGS=["/WX"])
+    else:
+        common_warnings = []
+        
+        if methods.using_gcc(env):
+            common_warnings += ["-Wshadow-local", "-Wno-misleading-indentation"]
+        elif methods.using_clang(env) or methods.using_emcc(env):
+            common_warnings += ["-Wno-ordered-compare-function-pointers"]
+            
+        if env["warnings"] == "extra":
+            env.Append(CCFLAGS=["-Wall", "-Wextra", "-Wwrite-strings", "-Wno-unused-parameter"] + common_warnings)
+            env.Append(CXXFLAGS=["-Wctor-dtor-privacy", "-Wnon-virtual-dtor"])
+            if methods.using_gcc(env):
+                env.Append(
+                    CCFLAGS=[
+                        "-Walloc-zero",
+                        "-Wduplicated-branches",
+                        "-Wduplicated-cond",
+                        "-Wstringop-overflow=4",
+                        "-Wlogical-op",
+                    ]
+                )
+                
+                env.Append(CXXFLAGS=["-Wplacement-new=1"])
+                if cc_version_major >= 9:
+                    env.Append(CCFLAGS=["-Wattribute-alias=2"])
+            elif methods.using_clang(env) or methods.using_emcc(env):
+                env.Append(CCFLAGS=["-Wimplicit-fallthrough"])
+        elif env["warnings"] == "all":
+            env.Append(CCFLAGS=["-Wall"] + common_warnings)
+        elif env["warnings"] == "moderate":
+            env.Append(CCFLAGS=["-Wall", "-Wno-unused"] + common_warnings)
+        else:
+            env.Append(CCFLAGS=["-w"])
+            
+        if env["werror"]:
+            env.Append(CCFLAGS=["-Werror"])
+            
+            if methods.using_gcc(env):
+                env.Append(CXXFLAGS=["-Wno-error=cpp"])
+                if cc_version_major == 7:
+                    env.Append(CCFLAGS=["-Wno-error=strict-overflow"])
+            elif methods.using_clang(env) or methods.using_emcc(env):
+                env.Append(CXXFLAGS=["-Wno-error=#warnings"])
+        else:
+            env.Append(CCFLAGS=["-Werror=return-type"])
+            
+    if hasattr(detect, "get_program_suffix"):
+        suffix = "." + detect.get_program_suffix()
+    else:
+        suffix = "." + selected_platform
+        
+    if env_base["float"] == "64":
+        suffix += ".double"
+        
+    if env["target"] == "release":
+        if env["tools"]:
+            print("Error: The editor can only be built with `target=debug` or `target=release_debug`.")
+            Exit(255)
+        suffix += ".opt"
+        env.Append(CPPDEFINES=["NDEBUG"])
+    elif env["target"] == "release_debug":
+        if env["tools"]:
+            suffix += ".opt.tools"
+        else:
+            suffix += ".opt.debug"
+    else:
+        if env["tools"]:
+            print(
+                "Note: Building a debug binary (which will run slowly). Use `target=release_debug` to build an optimized release binary."
+            )
+            suffix += ".tools"
+        else:
+             print(
+                "Note: Building a debug binary (which will run slowly). Use `target=release` to build an optimized release binary."
+            )
+            suffix += ".debug"
+    
+    if env["arch"] != "":
+        suffix += "." + env["arch"]
+    elif env["bits"] == "32":
+        suffix += ".32"
+    elif env["bits"] == "64":
+        suffix += ".64"
+        
+    suffix += env.extra_suffix
+    
+    sys.path.remove(tmppath)
+    sys.modules.pop("detect")
+    
+    modules_enabled = OrderedDict()
+    env.module_icons_paths = []
+    env.doc_class_path = {}
+    
+    for name, path in modules_detected.items():
+        if not env["module_" + name + "_enabled"]:
+            continue
+        sys.path.insert(0, path)
+        env.current_module = name
+        import config
+        
+        if config.can_build(env, selected_platform):
+            config.configure(env)
+            
+            try:
+                doc_classes = config.get_doc_classes()
+                doc_path = config.get_doc_path()
+                for c in doc_classes:
+                    env.doc_class_path[c] = path + "/" + doc_path
+            except Exception:
+                pass
+                
+            try:
+                icons_path = config.get_icons_path()
+                env.module_icons_paths.append(path + "/" + icons_path)
+            except Exception:
+                env.module_icons_paths.append(path + "/" + "icons")
+            modules_enabled[name] = path
+        
+        sys.path.remove(path)
+        sys.modules.pop("config")
+        
+    env.module_list = modules_enabled
+    
+    methods.update_version(env.module_version_string)
+    
+    env["PROGSUFFIX"] = suffix + env.module_version_string + env["PROGSUFFIX"]
+    env["OBJSUFFIX"] = suffix + env["OBJSUFFIX"]
+    
+    if os.name == "nt":
+        env["LIBSUFFIXES"] += [env["LIBSUFFIX"]]
+    else:
+        env["LIBSUFFIXES"] += [env["LIBSUFFIX"], env["SHLIBSUFFIX"]]
+    env["LIBSUFFIX"] = suffix + env["LIBSUFFIX"]
+    env["SHLIBSUFFIX"] = suffix + env["SHLIBSUFFIX"]
+    
+    if env["tools"]:
+        env.Append(CPPDEFINES=["TOOLS_ENABLED"])
+    methods.write_disabled_classes(env["disabled_classes"].split(","))
+    if env["disable_3d"]:
+        if env["tools"]:
+            print(
+                "Build option 'disable_3d=yes' cannot be used with 'tools=yes' (editor), "
+                "only with 'tools=no' (export template)."
+            )
+            Exit(255)
+        else:
+            env.Append(CPPDEFINES=["_3D_DISABLED"])
+    if env["disable_advanced_gui"]:
+        if env["tools"]:
+            print(
+                "Build option 'disable_advanced_gui=yes' cannot be used with 'tools=yes' (editor), "
+                "only with 'tools=no' (export template)."
+            )
+            Exit(255)
+        else:
+            env.Append(CPPDEFINES=["ADVANCED_GUI_DISABLED"])
+    if env["minizip"]:
+        env.Append(CPPDEFINES=["MINIZIP_ENABLED"])
+    
+    editor_module_list = ["freetype"]
+    if env["tools"] and not env.module_check_dependencies("tools", editor_module_list):
+        print(
+            "Build option 'module_"
+            + x
+            + "_enabled=no' cannot be used with 'tools=yes' (editor), only with 'tools=no' (export template)."
+        )
+        Exit(255)
+    
+    if not env["verbose"]:
+        methods.no_verbose(sys, env)
+    
+    GLSL_BUILDERS = {
+        "RD_GLSL": env.Builder(
+            action=env.Run(glsl_builders.build_rd_headers, 'Building RD_GLSL header: "$TARGET"'),
+            suffix="glsl.gen.h",
+            src_suffix=".glsl",
+        ),
+        "GLSL_HEADER": env.Builder(
+            action=env.Run(glsl_builders.build_raw_headers, 'Building GLSL header: "$TARGET"'),
+            suffix="glsl.gen.h",
+            src_suffix=".glsl",
+        ),
+    }
+    env.Append(BUILDERS=GLSL_BUILDERS)
+    
+    scons_cache_path = os.environ.get("SCONS_CACHE")
+    if scons_cache_path != None:
+        CacheDir(scons_cache_path)
+        print("Scons cache enabled... (path: '" + scons_cache_path + "')")
+        
+    if env["vsproj"]:
+        env.vs_incs = []
+        env.vs_srcs = []
+        
+    Export("env")
+    
+    SConscript("core/SCsub")
+    SConscript("servers/SCsub")
+    SConscript("editor/SCsub")
+    SConscript("drivers/SCsub")
+    
+    SConscript("platform/SCsub")
+    SConscript("modules/SCsub")
+    if env["tests"]:
+        SConscript("tests/SCsub")
+    SConscript("main/SCSub")
+    
+    SConscript("platform/" + selected_platform + "/SCSub")
+    
+    if env["vsproj"]:
+        env["CPPPATH"] = [Dir(path) for path in env["CPPPATH"]]
+        methods.generate_vs_project(env, GetOption("num_jobs"))
+        methods.generate_cpp_hint_file("cpp.hint")
+        
+    conf = Configure(env)
+    if "check_c_headers" in env:
+        for header in env["check_c_headers"]:
+            if conf.CheckCHeader(header[0]):
+                env.AppendUnique(CPPDEFINES=[header[1]])
+
+elif selected_platform != "":
+    if selected_platform == "list":
+        print("The following platforms are available:\n")
+    else:
+        print('Invalid target platform "' + selected_platform + '".')
+        print("The following platforms were detected:\n")
+        
+    for x in platform_list:
+        print("\t" + x)
+        
+    print("\nPlease run SCons again and select a valid platform: platform=<string>")
+    
+    if selected_platform == "list":
+        Exit()
+    else:
+        Exit(255)
+        
+if "env" in locals():
+    methods.show_progress(env)
+    
+    methods.dump(env)
+    
+def print_elapsed_time():
+    elapsed_time_sec = round(time.time() - time_at_start, 3)
+    time_ms = round((elapsed_time_sec % 1) * 1000)
+    print("[Time elapsed: {}.{:03}]".format(time.strftime("%H:%M:%S", time.gmtime(elapsed_time_sec)), time_ms))
+    
+atexit.register(print_elapsed_time)
