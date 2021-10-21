@@ -521,7 +521,7 @@ if selected_platform in platform_list:
             )
             suffix += ".tools"
         else:
-             print(
+            print(
                 "Note: Building a debug binary (which will run slowly). Use `target=release` to build an optimized release binary."
             )
             suffix += ".debug"
