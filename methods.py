@@ -201,7 +201,7 @@ def write_disabled_classes(class_list):
     f.write("\n#endif\n")
     
 def write_modules(modules):
-    includes_app = ""
+    includes_cpp = ""
     preregister_cpp = ""
     register_cpp = ""
     unregister_cpp = ""
