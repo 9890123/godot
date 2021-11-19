@@ -46,6 +46,9 @@ def disable_warnings(self):
         self.Append(CXXFLAGS=["-w"])
         
 def add_module_version_string(self, s):
+    self.module_version_string += "." + s
+        
+def update_version(module_version_string=""):
     build_name = "custom_build"
     if os.getenv("BUILD_NAME") != None:
         build_name = str(os.getenv("BUILD_NAME"))

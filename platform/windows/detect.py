@@ -46,15 +46,15 @@ def get_opts():
         mingw64 = os.getenv("MINGW64_PREFIX")
         
     return [
-        ("mingw_prefix_32", "MinGW prefix (Win32)", mingw32)
-        ("mingw_prefix_64", "MiNGW prefix (Win64)", mingw64)
+        ("mingw_prefix_32", "MinGW prefix (Win32)", mingw32),
+        ("mingw_prefix_64", "MiNGW prefix (Win64)", mingw64),
         
         ("target_win_version", "Targeted Windows version, >= 0x0601 (Windows 7)", "0x0601"),
         BoolVariable("debug_symbols", "Add debugging symbols to release/release_debug builds", True),
-        EnumVariable("windows_subsystem", "Windows subsystem", "default", ("debug", "console", "gui")),
+        EnumVariable("windows_subsystem", "Windows subsystem", "default", ("default", "console", "gui")),
         BoolVariable("separate_debug_symbols", "Create a separate file containing debugging symbols", False),
         ("msvc_version", "MSVC version to use. Ignored if VCINSTALLDIR is set in shell env.", None),
-        BoolVariable("use_mingw", "Use the Mingw compiler, even if MSVC is installed.", False)
+        BoolVariable("use_mingw", "Use the Mingw compiler, even if MSVC is installed.", False),
         BoolVariable("use_llvm", "Use the LLVM compiler", False),
         BoolVariable("use_thinlto", "Use ThinLTO", False),
         BoolVariable("use_static_cpp", "Link MinGW/MSVC C++ runtime libraries statically", True),
