@@ -586,7 +586,7 @@ if selected_platform in platform_list:
     
     if env["tools"]:
         env.Append(CPPDEFINES=["TOOLS_ENABLED"])
-    methods.write_disabled_classes(env["disabled_classes"].split(","))
+    methods.write_disabled_classes(env["disable_classes"].split(","))
     if env["disable_3d"]:
         if env["tools"]:
             print(
